@@ -179,7 +179,8 @@ If you cannot confidently classify (confidence < 0.6), use category "Unknown".""
             "response": str,
             "intent": str,
             "confidence": float,
-            "provenance": [transaction_ids]
+            "provenance": [transaction_ids],
+            "should_show_transactions": bool
         }
         """
         try:
@@ -188,11 +189,34 @@ If you cannot confidently classify (confidence < 0.6), use category "Unknown".""
                 logger.warning("Gemini chat model not available, using fallback response")
                 return self._fallback_chat_response(query, context)
             
-            # Build context string
-            context_str = "\n\n".join([
-                f"Transaction {i+1} (ID: {ctx.get('id', 'N/A')}): ₹{ctx.get('amount', 0)} at {ctx.get('merchant', 'Unknown')} on {ctx.get('date', 'Unknown')}"
-                for i, ctx in enumerate(context[:5])  # Top 5 contexts, simplified
-            ])
+            # Detect if query is conversational (greetings, name, casual chat)
+            query_lower = query.lower().strip()
+            conversational_patterns = [
+                "hi", "hello", "hey", "good morning", "good evening", "good afternoon",
+                "my name is", "i am", "i'm", "call me", "thanks", "thank you",
+                "how are you", "what's up", "whats up", "sup", "what can you do",
+                "help", "bye", "goodbye", "see you"
+            ]
+            
+            is_conversational = any(pattern in query_lower for pattern in conversational_patterns)
+            
+            # If conversational and no transaction keywords, don't show transactions
+            transaction_keywords = [
+                "spend", "spent", "transaction", "payment", "paid", "bought", "purchase",
+                "expense", "cost", "money", "rupee", "₹", "grocery", "food", "dining",
+                "transport", "shopping", "bill", "merchant", "show me", "tell me about",
+                "how much", "where", "when did i", "category", "total"
+            ]
+            
+            has_transaction_keywords = any(keyword in query_lower for keyword in transaction_keywords)
+            
+            # Build context string only if needed
+            context_str = ""
+            if context and has_transaction_keywords:
+                context_str = "\n\n".join([
+                    f"Transaction {i+1} (ID: {ctx.get('id', 'N/A')}): ₹{ctx.get('amount', 0)} at {ctx.get('merchant', 'Unknown')} on {ctx.get('date', 'Unknown')}, Category: {ctx.get('category', 'N/A')}"
+                    for i, ctx in enumerate(context[:5])  # Top 5 contexts
+                ])
             
             session_facts = "\n".join([f"- {k}: {v}" for k, v in session_memory.items()])
             persistent_facts = "\n".join([f"- {k}: {v}" for k, v in persistent_memory.items()])
@@ -211,19 +235,20 @@ Retrieved Transaction Context:
 User Query: {query}
 
 Instructions:
-1. Answer the user's question based on the provided transaction data
-2. Be conversational and helpful
-3. If you found specific transactions, mention their IDs and details
-4. If no relevant data, say so honestly
-5. Classify the intent: "exact_lookup", "summary", "trend", "conversational", or "unknown"
-6. Provide confidence score (0-1)
+1. Detect if this is a conversational query (greetings, introducing name, casual chat) or a transaction-related query
+2. For conversational queries: Respond naturally, be friendly, remember user facts. DO NOT mention transactions.
+3. For transaction queries: Answer based on the provided transaction data, mention specific details
+4. Classify the intent: "conversational" (greetings, name, chat), "transaction_query" (asking about spending), "summary", "trend", or "unknown"
+5. Provide confidence score (0-1)
+6. Set "should_show_transactions" to true ONLY if the query is about transactions and you found relevant data
 
 Respond ONLY with valid JSON:
 {{
     "response": "Your natural language response here",
     "intent": "intent_type",
     "confidence": 0.95,
-    "provenance": [list of transaction IDs used],
+    "provenance": [list of transaction IDs used, empty if conversational],
+    "should_show_transactions": false,
     "reasoning": "Why you gave this answer"
 }}"""
 
@@ -238,7 +263,16 @@ Respond ONLY with valid JSON:
             
             result = json.loads(result_text)
             
-            logger.info(f"Generated chat response with intent {result.get('intent', 'unknown')}")
+            # Ensure should_show_transactions is set
+            if "should_show_transactions" not in result:
+                # Default based on intent and context
+                result["should_show_transactions"] = (
+                    result.get("intent") not in ["conversational", "unknown"] 
+                    and len(context) > 0
+                    and has_transaction_keywords
+                )
+            
+            logger.info(f"Generated chat response with intent {result.get('intent', 'unknown')}, show_transactions: {result.get('should_show_transactions', False)}")
             return result
         
         except Exception as e:
@@ -249,18 +283,73 @@ Respond ONLY with valid JSON:
         """Fallback chat response when Gemini is unavailable"""
         query_lower = query.lower()
         
-        # Greetings
-        if any(greeting in query_lower for greeting in ["hello", "hi", "hey"]):
+        # Greetings and conversational patterns
+        if any(g in query_lower for g in ["hello", "hi", "hey", "good morning", "good evening"]):
             return {
                 "response": "Hello! I'm LUMEN, your financial assistant. I can help you understand your transactions, spending patterns, and answer questions about your finances. How can I help you today?",
                 "intent": "conversational",
                 "confidence": 0.9,
                 "provenance": [],
+                "should_show_transactions": False,
                 "reasoning": "Greeting detected"
             }
         
-        # If we have context, provide basic summary
-        if context and len(context) > 0:
+        if any(p in query_lower for p in ["my name is", "i am", "i'm", "call me"]):
+            return {
+                "response": "Nice to meet you! I'll remember that. Feel free to ask me anything about your transactions and spending.",
+                "intent": "conversational",
+                "confidence": 0.9,
+                "provenance": [],
+                "should_show_transactions": False,
+                "reasoning": "User introduction detected"
+            }
+        
+        if any(p in query_lower for p in ["how are you", "what's up", "whats up"]):
+            return {
+                "response": "I'm doing great, thank you for asking! I'm here to help you with your financial questions. What would you like to know?",
+                "intent": "conversational",
+                "confidence": 0.9,
+                "provenance": [],
+                "should_show_transactions": False,
+                "reasoning": "Casual greeting"
+            }
+        
+        if any(p in query_lower for p in ["thank", "thanks"]):
+            return {
+                "response": "You're welcome! Let me know if you need anything else.",
+                "intent": "conversational",
+                "confidence": 0.9,
+                "provenance": [],
+                "should_show_transactions": False,
+                "reasoning": "Thanks detected"
+            }
+        
+        if any(p in query_lower for p in ["help", "what can you do"]):
+            return {
+                "response": "I can help you analyze your transactions, track spending patterns, answer questions about specific purchases, and provide financial insights. Just ask me anything!",
+                "intent": "conversational",
+                "confidence": 0.9,
+                "provenance": [],
+                "should_show_transactions": False,
+                "reasoning": "Help request"
+            }
+        
+        if any(p in query_lower for p in ["bye", "goodbye", "see you"]):
+            return {
+                "response": "Goodbye! Feel free to come back anytime you need help with your finances.",
+                "intent": "conversational",
+                "confidence": 0.9,
+                "provenance": [],
+                "should_show_transactions": False,
+                "reasoning": "Goodbye detected"
+            }
+        
+        # Check for transaction-related keywords
+        transaction_keywords = ["spend", "spent", "transaction", "payment", "paid", "bought", "purchase", "expense", "grocery", "food", "transport"]
+        is_transaction_query = any(keyword in query_lower for keyword in transaction_keywords)
+        
+        # If we have context and it's a transaction query, provide basic summary
+        if context and len(context) > 0 and is_transaction_query:
             total = sum(ctx.get('amount', 0) for ctx in context)
             count = len(context)
             return {
@@ -268,15 +357,27 @@ Respond ONLY with valid JSON:
                 "intent": "summary",
                 "confidence": 0.6,
                 "provenance": [ctx.get('id') for ctx in context if 'id' in ctx],
+                "should_show_transactions": True,
                 "reasoning": "Fallback response with transaction data"
             }
         
-        # No context available
+        # No context available or not a transaction query
+        if not is_transaction_query:
+            return {
+                "response": "I'm here to help! You can ask me about your transactions, spending patterns, or specific purchases. What would you like to know?",
+                "intent": "conversational",
+                "confidence": 0.7,
+                "provenance": [],
+                "should_show_transactions": False,
+                "reasoning": "General query, no transaction keywords"
+            }
+        
         return {
             "response": "I'm currently running in limited mode. I couldn't find specific transactions related to your query. This could be because there are no matching transactions, or the AI service is temporarily unavailable. Please try again later or rephrase your question.",
             "intent": "unknown",
             "confidence": 0.3,
             "provenance": [],
+            "should_show_transactions": False,
             "reasoning": "No context available and Gemini unavailable"
         }
     

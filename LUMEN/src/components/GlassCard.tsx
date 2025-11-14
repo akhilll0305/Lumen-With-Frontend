@@ -1,4 +1,4 @@
-import React, { ReactNode } from 'react';
+import { ReactNode, forwardRef } from 'react';
 import { motion, HTMLMotionProps } from 'framer-motion';
 
 interface GlassCardProps extends Omit<HTMLMotionProps<'div'>, 'children'> {
@@ -9,16 +9,17 @@ interface GlassCardProps extends Omit<HTMLMotionProps<'div'>, 'children'> {
   noPadding?: boolean;
 }
 
-const GlassCard: React.FC<GlassCardProps> = ({ 
+const GlassCard = forwardRef<HTMLDivElement, GlassCardProps>(({ 
   children, 
   className = '', 
   hoverable = true,
   glowOnHover = false,
   noPadding = false,
   ...props 
-}) => {
+}, ref) => {
   return (
     <motion.div
+      ref={ref}
       className={`
         glass-card
         ${noPadding ? '' : 'p-6'}
@@ -35,6 +36,8 @@ const GlassCard: React.FC<GlassCardProps> = ({
       {children}
     </motion.div>
   );
-};
+});
+
+GlassCard.displayName = 'GlassCard';
 
 export default GlassCard;

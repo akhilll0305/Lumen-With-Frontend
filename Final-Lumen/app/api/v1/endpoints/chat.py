@@ -65,6 +65,22 @@ async def send_message(
             persistent_memory
         )
         
+        # Determine if we should show transactions
+        should_show_transactions = response.get("should_show_transactions", False)
+        
+        # Format transactions for frontend display
+        transactions_to_show = []
+        if should_show_transactions and context:
+            for ctx in context[:5]:  # Show top 5 transactions
+                transactions_to_show.append({
+                    "id": ctx.get("id"),
+                    "merchant": ctx.get("merchant"),
+                    "amount": ctx.get("amount"),
+                    "category": ctx.get("category"),
+                    "date": ctx.get("date"),
+                    "payment_channel": ctx.get("payment_channel"),
+                })
+        
         # Save assistant response
         assistant_message = ChatMessage(
             session_id=session.id,
@@ -73,9 +89,10 @@ async def send_message(
             intent=response.get("intent"),
             provenance={
                 "transaction_ids": response.get("provenance", []),
-                "confidence": response.get("confidence")
+                "confidence": response.get("confidence"),
+                "should_show_transactions": should_show_transactions
             },
-            retrieved_docs=context
+            retrieved_docs=context if should_show_transactions else []
         )
         db.add(assistant_message)
         
@@ -90,8 +107,9 @@ async def send_message(
             "response": response["response"],
             "intent": response.get("intent"),
             "confidence": response.get("confidence"),
+            "should_show_transactions": should_show_transactions,
             "provenance": {"transaction_ids": response.get("provenance", [])},
-            "retrieved_docs": context
+            "retrieved_docs": transactions_to_show
         }
     
     except Exception as e:

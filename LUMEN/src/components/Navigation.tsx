@@ -11,7 +11,7 @@ import { useThemeStore } from './ThemeToggle';
 
 const navItems = [
   { path: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
-  { path: '/pending-review', label: 'Pending Review', icon: AlertCircle },
+  // { path: '/pending-review', label: 'Pending Review', icon: AlertCircle },
   { path: '/analytics', label: 'Analytics', icon: TrendingUp },
 ];
 

@@ -9,9 +9,9 @@ import Button from './Button';
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { name: 'Upload', href: '/upload', icon: Upload },
-  { name: 'Pending Reviews', href: '/pending-reviews', icon: AlertCircle },
   { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-];
+];  // { name: 'Pending Reviews', href: '/pending-reviews', icon: AlertCircle },
+
 
 const AuthenticatedNav: React.FC = () => {
   const location = useLocation();

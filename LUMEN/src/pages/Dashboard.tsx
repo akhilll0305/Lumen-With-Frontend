@@ -222,7 +222,7 @@ export default function Dashboard() {
                 />
               )}
             </div>
-            <h3 className="text-text-secondary text-sm font-medium mb-2 relative z-10">Pending Reviews</h3>
+            {/* <h3 className="text-text-secondary text-sm font-medium mb-2 relative z-10">Pending Reviews</h3> */}
             <div className="text-3xl font-bold mb-4 relative z-10">{pendingReviews}</div>
             <button className="text-cyan hover:text-cyan-dark font-medium text-sm transition-colors relative z-10 flex items-center gap-1 group-hover:gap-2">
               Review <span className="transition-all">→</span>

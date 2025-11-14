@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import StatCard from '../components/StatCard';
 import GlassCard from '../components/GlassCard';
 import ProgressBar from '../components/ProgressBar';
@@ -7,7 +8,9 @@ import PageTransition from '../components/PageTransition';
 import UltraPremiumBackground from '../components/UltraPremiumBackground';
 import MouseGlow from '../components/MouseGlow';
 import AuthenticatedNav from '../components/AuthenticatedNav';
-import { DollarSign, ShoppingCart, TrendingUp } from 'lucide-react';
+import TransactionCard from '../components/TransactionCardComponent';
+import { DollarSign, ShoppingCart, TrendingUp, Filter } from 'lucide-react';
+import { transactionService } from '../services/api';
 import {
   AreaChart,
   Area,
@@ -20,48 +23,182 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
-const spendingOverTime = [
-  { date: 'Jan 1', amount: 42 },
-  { date: 'Jan 3', amount: 38 },
-  { date: 'Jan 5', amount: 51 },
-  { date: 'Jan 7', amount: 45 },
-  { date: 'Jan 9', amount: 39 },
-  { date: 'Jan 11', amount: 55 },
-  { date: 'Jan 13', amount: 144 },
-];
-
-const categoryData = [
-  { name: 'Groceries', value: 450, color: '#00D9FF' },
-  { name: 'Dining', value: 287, color: '#8B5CF6' },
-  { name: 'Transport', value: 180, color: '#10B981' },
-  { name: 'Utilities', value: 220, color: '#F59E0B' },
-  { name: 'Entertainment', value: 110, color: '#EF4444' },
-];
-
-const topMerchants = [
-  { name: 'Walmart', amount: 320, percentage: 25 },
-  { name: 'Starbucks', amount: 125.5, percentage: 10 },
-  { name: 'Shell Gas', amount: 180, percentage: 14 },
-  { name: 'Chipotle', amount: 98, percentage: 8 },
-  { name: 'Amazon', amount: 156, percentage: 12 },
-];
-
-const forecastData = [
-  { category: 'Groceries', amount: 470, change: 4 },
-  { category: 'Dining', amount: 295, change: 3 },
-  { category: 'Transport', amount: 185, change: 3 },
-  { category: 'Utilities', amount: 220, change: 0 },
-  { category: 'Entertainment', amount: 150, change: 36 },
-];
+const CATEGORY_COLORS: { [key: string]: string } = {
+  'Groceries': '#00D9FF',
+  'Dining': '#8B5CF6',
+  'Transport': '#10B981',
+  'Utilities': '#F59E0B',
+  'Entertainment': '#EF4444',
+  'Shopping': '#F97316',
+  'Healthcare': '#14B8A6',
+  'Education': '#A855F7',
+  'Other': '#64748B',
+};
 
 export default function AnalyticsPage() {
-  const [timeRange, setTimeRange] = useState<'month' | '30days' | '3months' | 'custom'>('month');
+  const [timeRange, setTimeRange] = useState<'month' | '30days' | '3months'>('month');
+  const [allTransactions, setAllTransactions] = useState<any[]>([]);
+  const [filteredTransactions, setFilteredTransactions] = useState<any[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string>('all');
+  const [categories, setCategories] = useState<string[]>(['all']);
+  const [topMerchants, setTopMerchants] = useState<Array<{name: string; amount: number; percentage: number}>>([]);
+  
+  // Time-range filtered data
+  const [timeRangeTransactions, setTimeRangeTransactions] = useState<any[]>([]);
+  const [spendingOverTime, setSpendingOverTime] = useState<Array<{date: string; amount: number}>>([]);
+  const [categoryData, setCategoryData] = useState<Array<{name: string; value: number; color: string}>>([]);
+  const [totalSpent, setTotalSpent] = useState(0);
+  const [totalTransactions, setTotalTransactions] = useState(0);
+  const [avgPerDay, setAvgPerDay] = useState(0);
+  
+  const transactionsSectionRef = useRef<HTMLDivElement>(null);
+  const location = useLocation();
 
-  const totalSpent = categoryData.reduce((sum, cat) => sum + cat.value, 0);
-  const totalTransactions = 47;
-  const avgPerDay = totalSpent / 30;
-  const forecastTotal = forecastData.reduce((sum, cat) => sum + cat.amount, 0);
-  const budget = 1500;
+  // Fetch all transactions from API
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const response = await transactionService.getTransactions({ limit: 1000 });
+        if (response.success && response.data) {
+          const transactions = response.data.transactions || [];
+          setAllTransactions(transactions);
+          setFilteredTransactions(transactions);
+          
+          // Extract unique categories
+          const uniqueCategories = ['all', ...new Set(transactions.map((t: any) => t.category).filter(Boolean))];
+          setCategories(uniqueCategories as string[]);
+
+          // Calculate top merchants by total amount spent
+          const merchantTotals = transactions.reduce((acc: any, t: any) => {
+            const merchantName = t.merchant_name_raw || 'Unknown';
+            if (!acc[merchantName]) {
+              acc[merchantName] = 0;
+            }
+            acc[merchantName] += t.amount || 0;
+            return acc;
+          }, {});
+
+          // Convert to array and sort by amount (descending)
+          const merchantArray = Object.entries(merchantTotals).map(([name, amount]) => ({
+            name,
+            amount: amount as number,
+          }));
+          merchantArray.sort((a, b) => b.amount - a.amount);
+
+          // Calculate total spent for percentages
+          const totalSpent = merchantArray.reduce((sum, m) => sum + m.amount, 0);
+
+          // Get top 5 merchants with percentages
+          const top5 = merchantArray.slice(0, 5).map(m => ({
+            name: m.name,
+            amount: m.amount,
+            percentage: totalSpent > 0 ? Math.round((m.amount / totalSpent) * 100) : 0,
+          }));
+          setTopMerchants(top5);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+      }
+    };
+    fetchTransactions();
+  }, []);
+
+  // Filter transactions when category changes
+  useEffect(() => {
+    if (selectedCategory === 'all') {
+      // Sort all transactions by date (most recent first)
+      const sorted = [...allTransactions].sort((a: any, b: any) => 
+        new Date(b.date).getTime() - new Date(a.date).getTime()
+      );
+      setFilteredTransactions(sorted);
+    } else {
+      // Filter by category and sort by date
+      const filtered = allTransactions
+        .filter(t => t.category === selectedCategory)
+        .sort((a: any, b: any) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        );
+      setFilteredTransactions(filtered);
+    }
+  }, [selectedCategory, allTransactions]);
+
+  // Filter transactions by time range and calculate analytics
+  useEffect(() => {
+    const now = new Date();
+    let startDate: Date;
+    let days: number;
+
+    switch (timeRange) {
+      case 'month':
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        days = now.getDate();
+        break;
+      case '30days':
+        startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        days = 30;
+        break;
+      case '3months':
+        startDate = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+        days = 90;
+        break;
+      default:
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        days = now.getDate();
+    }
+
+    // Filter transactions within time range
+    const filtered = allTransactions.filter((t: any) => {
+      const transactionDate = new Date(t.date);
+      return transactionDate >= startDate && transactionDate <= now;
+    });
+    setTimeRangeTransactions(filtered);
+
+    // Calculate total spent
+    const total = filtered.reduce((sum: number, t: any) => sum + (t.amount || 0), 0);
+    setTotalSpent(total);
+
+    // Calculate total transactions
+    setTotalTransactions(filtered.length);
+
+    // Calculate avg per day
+    setAvgPerDay(days > 0 ? total / days : 0);
+
+    // Calculate spending over time (daily aggregation)
+    const dailySpending: { [key: string]: number } = {};
+    filtered.forEach((t: any) => {
+      const dateKey = new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+      dailySpending[dateKey] = (dailySpending[dateKey] || 0) + (t.amount || 0);
+    });
+
+    const spendingArray = Object.entries(dailySpending)
+      .map(([date, amount]) => ({ date, amount }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    setSpendingOverTime(spendingArray);
+
+    // Calculate category spending
+    const categoryTotals: { [key: string]: number } = {};
+    filtered.forEach((t: any) => {
+      const category = t.category || 'Other';
+      categoryTotals[category] = (categoryTotals[category] || 0) + (t.amount || 0);
+    });
+
+    const categoryArray = Object.entries(categoryTotals).map(([name, value]) => ({
+      name,
+      value: value as number,
+      color: CATEGORY_COLORS[name] || '#64748B',
+    })).sort((a, b) => b.value - a.value);
+    setCategoryData(categoryArray);
+
+  }, [timeRange, allTransactions]);
+
+  // Scroll to transactions section if hash is present
+  useEffect(() => {
+    if (location.hash === '#transactions' && transactionsSectionRef.current) {
+      setTimeout(() => {
+        transactionsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 300);
+    }
+  }, [location]);
 
   return (
     <PageTransition className="min-h-screen pb-20 relative overflow-hidden">
@@ -81,7 +218,7 @@ export default function AnalyticsPage() {
 
         {/* Time Range Selector */}
         <div className="flex gap-4">
-          {(['month', '30days', '3months', 'custom'] as const).map((range) => (
+          {(['month', '30days', '3months'] as const).map((range) => (
             <button
               key={range}
             onClick={() => setTimeRange(range)}
@@ -95,9 +232,7 @@ export default function AnalyticsPage() {
               ? 'This Month'
               : range === '30days'
               ? 'Last 30 Days'
-              : range === '3months'
-              ? 'Last 3 Months'
-              : 'Custom'}
+              : 'Last 3 Months'}
           </button>
         ))}
       </div>
@@ -108,14 +243,12 @@ export default function AnalyticsPage() {
           title="Total Spent"
           value={totalSpent}
           prefix="$"
-          change={12}
           icon={DollarSign}
           variant="primary"
         />
         <StatCard
           title="Transactions"
           value={totalTransactions}
-          change={5}
           icon={ShoppingCart}
           variant="success"
         />
@@ -123,7 +256,6 @@ export default function AnalyticsPage() {
           title="Avg/Day"
           value={avgPerDay}
           prefix="$"
-          change={8}
           icon={TrendingUp}
           variant="warning"
         />
@@ -254,7 +386,7 @@ export default function AnalyticsPage() {
       </GlassCard>
 
       {/* Next Month Forecast */}
-      <GlassCard hoverable={false}>
+      {/* <GlassCard hoverable={false}>
         <h2 className="text-xl font-bold mb-6">🔮 Next Month Forecast</h2>
         <p className="text-text-secondary mb-4">
           Based on your patterns, we predict:
@@ -300,6 +432,70 @@ export default function AnalyticsPage() {
               </div>
             </motion.div>
           ))}
+        </div>
+      </GlassCard> */}
+
+      {/* All Transactions Section */}
+      <GlassCard hoverable={false} ref={transactionsSectionRef}>
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold">📋 All Transactions</h2>
+          
+          {/* Category Filter */}
+          <div className="flex items-center gap-3">
+            <Filter className="w-5 h-5 text-text-secondary" />
+            <select
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+              className="bg-glass-bg border border-glass-border rounded-lg px-4 py-2 text-text-primary focus:outline-none focus:ring-2 focus:ring-cyan"
+            >
+              {categories.map((cat) => (
+                <option key={cat} value={cat}>
+                  {cat === 'all' ? 'All Categories' : cat}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="text-text-secondary mb-4">
+          Showing {filteredTransactions.length} transaction{filteredTransactions.length !== 1 ? 's' : ''}
+          {selectedCategory !== 'all' && ` in ${selectedCategory} category`}
+        </div>
+
+        {selectedCategory !== 'all' && filteredTransactions.length > 0 && (
+          <div className="mb-4 p-4 bg-cyan/10 border border-cyan/30 rounded-lg">
+            <p className="text-sm text-cyan font-medium mb-2">
+              📍 Merchants in {selectedCategory}:
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {[...new Set(filteredTransactions.map((t: any) => t.merchant_name_raw))].map((merchant: any) => (
+                <span key={merchant} className="px-3 py-1 bg-glass-bg rounded-full text-xs text-text-primary border border-glass-border">
+                  {merchant}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="space-y-4 max-h-[600px] overflow-y-auto pr-2">
+          {filteredTransactions.length === 0 ? (
+            <div className="text-center py-12 text-text-secondary">
+              No transactions found
+            </div>
+          ) : (
+            filteredTransactions.map((transaction, index) => (
+              <TransactionCard
+                key={transaction.id}
+                id={String(transaction.id)}
+                amount={transaction.amount}
+                description={transaction.merchant_name_raw || 'Unknown Merchant'}
+                date={new Date(transaction.date).toLocaleDateString()}
+                status={transaction.flagged ? 'flagged' : 'completed'}
+                category={transaction.category}
+                index={index}
+              />
+            ))
+          )}
         </div>
       </GlassCard>
       </div>

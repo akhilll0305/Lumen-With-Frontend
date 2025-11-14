@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
-import { DollarSign, TrendingUp, AlertCircle, ArrowUpRight, ArrowDownRight, Clock, Shield } from 'lucide-react';
+import { DollarSign, TrendingUp, ArrowUpRight, ArrowDownRight, Clock, Shield } from 'lucide-react';
 import { Link, useNavigate } from 'react-router-dom';
 import GlassCard from '../components/GlassCard';
 import Button from '../components/Button';
@@ -11,15 +11,16 @@ import UltraPremiumBackground from '../components/UltraPremiumBackground';
 import MouseGlow from '../components/MouseGlow';
 import AuthenticatedNav from '../components/AuthenticatedNav';
 import { containerVariants, itemVariants } from '../utils/animations';
-import { mockTransactions } from '../utils/mockData';
 import { useAuthStore } from '../store/authStore';
 import { API_ENDPOINTS, getAuthHeaders } from '../config/api';
+import { transactionService } from '../services/api';
 
 export default function DashboardPremium() {
   const { logout } = useAuthStore();
   const navigate = useNavigate();
   const [userName, setUserName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
 
   useEffect(() => {
     const token = localStorage.getItem('AUTH_TOKEN');
@@ -69,17 +70,34 @@ export default function DashboardPremium() {
     day: 'numeric',
   });
 
+  // Fetch transactions from API
+  useEffect(() => {
+    const fetchTransactions = async () => {
+      try {
+        const response = await transactionService.getTransactions({ limit: 100 });
+        if (response.success && response.data) {
+          // Sort by date (most recent first) and take top 5
+          const sorted = (response.data.transactions || []).sort((a: any, b: any) => 
+            new Date(b.date).getTime() - new Date(a.date).getTime()
+          ).slice(0, 5);
+          setRecentTransactions(sorted);
+        }
+      } catch (error) {
+        console.error('Failed to fetch transactions:', error);
+      }
+    };
+    fetchTransactions();
+  }, []);
+
   // Calculate stats
   const totalBalance = 45280.50;
   const monthlyIncome = 12500.00;
   const monthlyExpenses = 8347.25;
-  const pendingReviews = mockTransactions.filter((t) => t.status === 'flagged').length;
-  const recentTransactions = mockTransactions.slice(0, 5);
   const savingsRate = ((monthlyIncome - monthlyExpenses) / monthlyIncome * 100).toFixed(1);
 
   const quickStats = [
     {
-      title: 'Total Balance',
+      title: 'Total Amount Spent',
       value: totalBalance,
       prefix: '$',
       icon: DollarSign,
@@ -102,13 +120,13 @@ export default function DashboardPremium() {
       trend: 'down' as const,
       trendValue: '-3.1%',
     },
-    {
-      title: 'Pending Reviews',
-      value: pendingReviews,
-      icon: AlertCircle,
-      trend: pendingReviews > 0 ? 'neutral' as const : 'up' as const,
-      trendValue: `${pendingReviews} items`,
-    },
+    // {
+    //   title: 'Pending Reviews',
+    //   value: pendingReviews,
+    //   icon: AlertCircle,
+    //   trend: pendingReviews > 0 ? 'neutral' as const : 'up' as const,
+    //   trendValue: `${pendingReviews} items`,
+    // },
   ];
 
   const insights = [
@@ -235,7 +253,7 @@ export default function DashboardPremium() {
             >
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-2xl font-heading font-semibold">Recent Transactions</h2>
-                <Link to="/analytics">
+                <Link to="/analytics#transactions">
                   <Button variant="ghost" size="sm">
                     View All
                     <ArrowUpRight className="w-4 h-4" />
@@ -247,11 +265,11 @@ export default function DashboardPremium() {
                 {recentTransactions.map((transaction, index) => (
                   <TransactionCard
                     key={transaction.id}
-                    id={transaction.id}
+                    id={String(transaction.id)}
                     amount={transaction.amount}
-                    description={transaction.merchant}
+                    description={transaction.merchant_name_raw || 'Unknown Merchant'}
                     date={new Date(transaction.date).toLocaleDateString()}
-                    status={transaction.status as 'completed' | 'pending' | 'flagged'}
+                    status={transaction.flagged ? 'flagged' : 'completed'}
                     category={transaction.category}
                     index={index}
                   />
@@ -350,7 +368,7 @@ export default function DashboardPremium() {
             </motion.div>
 
             {/* Quick Actions */}
-            <motion.div
+            {/* <motion.div
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.5, delay: 0.6 }}
@@ -375,7 +393,7 @@ export default function DashboardPremium() {
                   </Link>
                 </div>
               </GlassCard>
-            </motion.div>
+            </motion.div> */}
 
             {/* Account Security */}
             <motion.div
