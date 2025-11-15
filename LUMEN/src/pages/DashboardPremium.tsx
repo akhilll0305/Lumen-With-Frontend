@@ -53,6 +53,10 @@ export default function DashboardPremium() {
         }
         const data = await res.json();
         console.log('User data received:', data);
+        console.log('User type from response:', data.user_type);
+        console.log('Name from response:', data.name);
+        console.log('Business name from response:', data.business_name);
+        console.log('Contact person from response:', data.contact_person);
         
         // Detect user type from JWT token in localStorage OR from response
         const userType = data.user_type || (() => {
@@ -78,7 +82,7 @@ export default function DashboardPremium() {
         setUserName(name);
         setAvatarUrl(data.avatar_url || null);
         
-        console.log('Username set to:', name);
+        console.log('Final username set to:', name);
         console.log('Avatar URL set to:', data.avatar_url);
       } catch (err) {
         console.error('Failed to fetch current user', err);
@@ -277,7 +281,7 @@ export default function DashboardPremium() {
               {/* Show user's avatar or initials */}
               {avatarUrl ? (
                 <img 
-                  src={avatarUrl} 
+                  src={avatarUrl.startsWith('http') ? avatarUrl : `http://localhost:8000${avatarUrl}`}
                   alt={userName && userName.split(' ')[0] ? userName.split(' ')[0] : 'User avatar'} 
                   className="w-full h-full object-cover" 
                 />

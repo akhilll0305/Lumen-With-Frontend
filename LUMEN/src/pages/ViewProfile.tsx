@@ -23,6 +23,9 @@ export default function ViewProfile() {
         });
         if (res.ok) {
           const data = await res.json();
+          console.log('[ViewProfile] User data received:', data);
+          console.log('[ViewProfile] Name field:', data.name);
+          console.log('[ViewProfile] User type:', data.user_type);
           setUserData(data);
         }
       } catch (error) {
@@ -68,11 +71,17 @@ export default function ViewProfile() {
         <GlassCard>
           {/* Avatar Section */}
           <div className="flex items-center gap-6 mb-8 pb-8 border-b border-glass-border">
-            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-4xl font-bold text-white">
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-4xl font-bold text-white overflow-hidden">
               {userData?.avatar_url ? (
-                <img src={userData.avatar_url} alt="Avatar" className="w-full h-full rounded-full object-cover" />
+                <img 
+                  src={userData.avatar_url.startsWith('http') ? userData.avatar_url : `http://localhost:8000${userData.avatar_url}`}
+                  alt="Avatar" 
+                  className="w-full h-full object-cover" 
+                />
               ) : (
-                userData?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'U'
+                <div className="w-full h-full flex items-center justify-center">
+                  {userData?.name?.split(' ').map((n: string) => n[0]).join('').toUpperCase().slice(0, 2) || 'U'}
+                </div>
               )}
             </div>
             <div>

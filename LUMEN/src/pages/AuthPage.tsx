@@ -7,7 +7,7 @@ import MouseGlow from '../components/MouseGlow';
 import Button from '../components/Button';
 import GlassCard from '../components/GlassCard';
 import { useAuthStore } from '../store/authStore';
-import { API_ENDPOINTS } from '../config/api';
+import { API_ENDPOINTS, API_BASE_URL } from '../config/api';
 
 export default function AuthPage() {
   const [isLogin, setIsLogin] = useState(true);
@@ -53,7 +53,28 @@ export default function AuthPage() {
         
         navigate('/');
       } else {
-        // Signup flow - send JSON data
+        // Signup flow
+        let avatarUrl = '';
+        
+        // Upload avatar if selected
+        if (avatarFile) {
+          const formData = new FormData();
+          formData.append('file', avatarFile);
+          
+          const uploadRes = await fetch(`${API_BASE_URL}/api/v1/users/upload-avatar`, {
+            method: 'POST',
+            body: formData,
+          });
+          
+          if (uploadRes.ok) {
+            const uploadData = await uploadRes.json();
+            avatarUrl = uploadData.avatar_url;
+          } else {
+            console.error('Failed to upload avatar');
+          }
+        }
+        
+        // Send registration data with avatar URL
         const registrationData: any = {
           email,
           password,
@@ -65,6 +86,7 @@ export default function AuthPage() {
         if (businessName) registrationData.business_name = businessName;
         if (contactPerson) registrationData.contact_person = contactPerson;
         if (gstin) registrationData.gstin = gstin;
+        if (avatarUrl) registrationData.avatar_url = avatarUrl;
 
         const res = await fetch(API_ENDPOINTS.AUTH.REGISTER, {
           method: 'POST',

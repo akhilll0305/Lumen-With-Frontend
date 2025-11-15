@@ -31,6 +31,7 @@ class RegisterRequest(BaseModel):
     name: str
     user_type: str  # 'consumer' or 'business'
     phone: Optional[str] = None
+    avatar_url: Optional[str] = None  # URL to uploaded avatar
     
     # Optional business fields
     business_name: Optional[str] = None

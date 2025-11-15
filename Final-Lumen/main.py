@@ -6,9 +6,11 @@ Main FastAPI Application Entry Point
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 import logging
 from datetime import datetime
+from pathlib import Path
 
 from app.core.config import settings
 from app.core.database import engine, audit_engine, Base, AuditBase
@@ -99,6 +101,11 @@ async def health_check():
 
 # Include API routes
 app.include_router(api_router, prefix="/api/v1")
+
+# Mount static files directory for avatars
+UPLOAD_DIR = Path("uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 
 # Root endpoint

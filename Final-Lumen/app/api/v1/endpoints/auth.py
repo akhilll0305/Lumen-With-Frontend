@@ -61,6 +61,7 @@ async def register(
                 name=request.name,
                 phone=request.phone,
                 hashed_password=hashed_password,
+                avatar_url=request.avatar_url,
                 personal_category_set=settings.DEFAULT_CONSUMER_CATEGORIES
             )
             db.add(user)
@@ -90,6 +91,7 @@ async def register(
                 contact_person=request.contact_person,
                 phone=request.phone,
                 hashed_password=hashed_password,
+                avatar_url=request.avatar_url,
                 gstin=request.gstin,
                 business_category_set=settings.DEFAULT_BUSINESS_CATEGORIES
             )

@@ -1,13 +1,50 @@
 """User endpoints - stub implementation"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.utils.auth import get_current_user
 from app.models.user import UserConsumer, UserBusiness
 from app.schemas.user import UserConsumerUpdate, UserBusinessUpdate
 from datetime import datetime
+import os
+import uuid
+from pathlib import Path
 
 router = APIRouter()
+
+# Directory to store uploaded avatars
+UPLOAD_DIR = Path("uploads/avatars")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+
+@router.post("/upload-avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+):
+    """Upload avatar image (public endpoint for registration)"""
+    try:
+        # Validate file type
+        if not file.content_type or not file.content_type.startswith('image/'):
+            raise HTTPException(status_code=400, detail="File must be an image")
+        
+        # Generate unique filename
+        file_extension = os.path.splitext(file.filename)[1]
+        unique_filename = f"{uuid.uuid4()}{file_extension}"
+        file_path = UPLOAD_DIR / unique_filename
+        
+        # Save file
+        contents = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(contents)
+        
+        # Return URL
+        avatar_url = f"/uploads/avatars/{unique_filename}"
+        return {"avatar_url": avatar_url}
+    
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to upload avatar: {str(e)}")
+
 
 @router.get("/me")
 async def get_current_user_profile(
@@ -18,10 +55,16 @@ async def get_current_user_profile(
     user = current_user["user"]
     user_type = current_user.get("user_type", "consumer")
     
+    # Get name based on user type
+    if user_type == "business":
+        name = getattr(user, 'business_name', None) or getattr(user, 'contact_person', None)
+    else:
+        name = getattr(user, 'name', None)
+    
     # Return properly formatted user data
     user_data = {
         "id": user.id,
-        "name": user.name,
+        "name": name,
         "email": user.email,
         "phone": getattr(user, 'phone', None),
         "location": getattr(user, 'location', None),
