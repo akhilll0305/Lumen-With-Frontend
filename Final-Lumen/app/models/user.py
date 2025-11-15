@@ -23,6 +23,8 @@ class UserConsumer(Base):
     name = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     phone = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
     
     # Settings
@@ -65,6 +67,8 @@ class UserBusiness(Base):
     contact_person = Column(String, nullable=False)
     email = Column(String, unique=True, index=True, nullable=False)
     phone = Column(String, nullable=True)
+    location = Column(String, nullable=True)
+    avatar_url = Column(String, nullable=True)
     hashed_password = Column(String, nullable=False)
     
     # Business specific

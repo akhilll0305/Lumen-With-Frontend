@@ -43,6 +43,8 @@ class UserConsumerResponse(UserBase):
 class UserConsumerUpdate(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
+    location: Optional[str] = None
+    avatar_url: Optional[str] = None
     timezone: Optional[str] = None
     locale: Optional[str] = None
     currency: Optional[str] = None

@@ -100,7 +100,14 @@ export default function AnalyticsPage() {
         console.error('Failed to fetch transactions:', error);
       }
     };
+    
+    // Fetch immediately
     fetchTransactions();
+    
+    // Poll every 10 seconds for new transactions
+    const interval = setInterval(fetchTransactions, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   // Filter transactions when category changes

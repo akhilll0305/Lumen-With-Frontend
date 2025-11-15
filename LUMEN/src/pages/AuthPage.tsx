@@ -48,7 +48,8 @@ export default function AuthPage() {
           lastName: '',
           email: email,
           avatar: '',
-        });
+          userType: userType as 'consumer' | 'business',
+        }, userType as 'consumer' | 'business');
         
         navigate('/');
       } else {
@@ -82,7 +83,8 @@ export default function AuthPage() {
           lastName: nameParts.slice(1).join(' ') || '',
           email: email,
           avatar: '',
-        });
+          userType: userType as 'consumer' | 'business',
+        }, userType as 'consumer' | 'business');
         
         navigate('/');
       }

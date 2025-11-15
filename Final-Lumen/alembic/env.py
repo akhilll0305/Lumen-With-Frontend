@@ -21,8 +21,9 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Set SQLAlchemy URL from settings
-config.set_main_option('sqlalchemy.url', settings.DATABASE_URL)
+# Set SQLAlchemy URL from settings - escape % for ConfigParser
+db_url = settings.DATABASE_URL.replace('%', '%%')
+config.set_main_option('sqlalchemy.url', db_url)
 
 # add your model's MetaData object here
 target_metadata = Base.metadata

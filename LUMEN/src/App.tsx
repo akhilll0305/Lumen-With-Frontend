@@ -8,6 +8,9 @@ import DashboardPremium from './pages/DashboardPremium';
 import PendingReviewPagePremium from './pages/PendingReviewPagePremium';
 import ChatPagePremium from './pages/ChatPagePremium';
 import AnalyticsPage from './pages/AnalyticsPage';
+import ViewProfile from './pages/ViewProfile';
+import UpdateProfile from './pages/UpdateProfile';
+import AddTransaction from './pages/AddTransaction';
 import UploadModal from './components/UploadModal';
 import AIChatAssistant from './components/AIChatAssistant';
 
@@ -68,10 +71,34 @@ function App() {
             }
           />
           <Route
+            path="/add-transaction"
+            element={
+              <ProtectedRoute>
+                <AddTransaction />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/view-profile"
+            element={
+              <ProtectedRoute>
+                <ViewProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/update-profile"
+            element={
+              <ProtectedRoute>
+                <UpdateProfile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/profile"
             element={
               <ProtectedRoute>
-                <DashboardPremium />
+                <ViewProfile />
               </ProtectedRoute>
             }
           />

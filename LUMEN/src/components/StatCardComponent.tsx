@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import CountUp from 'react-countup';
-import { LucideIcon } from 'lucide-react';
+import { LucideIcon, Edit2, Check, X } from 'lucide-react';
 
 interface StatCardProps {
   title: string;
@@ -14,6 +14,8 @@ interface StatCardProps {
   className?: string;
   animated?: boolean;
   decimals?: number;
+  editable?: boolean;
+  onSave?: (value: number) => void;
 }
 
 const StatCard: React.FC<StatCardProps> = ({
@@ -27,11 +29,29 @@ const StatCard: React.FC<StatCardProps> = ({
   className = '',
   animated = true,
   decimals = 0,
+  editable = false,
+  onSave,
 }) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [tempValue, setTempValue] = useState(String(value));
+
   const trendColors = {
     up: 'text-success',
     down: 'text-error',
     neutral: 'text-text-secondary',
+  };
+
+  const handleSave = () => {
+    const numValue = parseFloat(tempValue);
+    if (!isNaN(numValue) && numValue >= 0 && onSave) {
+      onSave(numValue);
+      setIsEditing(false);
+    }
+  };
+
+  const handleCancel = () => {
+    setTempValue(String(value));
+    setIsEditing(false);
   };
 
   return (
@@ -44,19 +64,61 @@ const StatCard: React.FC<StatCardProps> = ({
     >
       <div className="flex items-start justify-between">
         <div className="flex-1">
-          <p className="text-text-secondary text-sm font-medium mb-2">{title}</p>
-          <div className="flex items-baseline gap-1">
-            <span className="text-text-primary text-3xl font-bold">
-              {prefix}
-              {animated && typeof value === 'number' ? (
-                <CountUp end={value} duration={2} decimals={decimals} separator="," />
-              ) : (
-                value
-              )}
-              {suffix}
-            </span>
+          <div className="flex items-center justify-between mb-2">
+            <p className="text-text-secondary text-sm font-medium">{title}</p>
+            {editable && !isEditing && (
+              <button
+                onClick={() => setIsEditing(true)}
+                className="p-1 hover:bg-glass-bg rounded transition-colors"
+                title="Edit value"
+              >
+                <Edit2 className="w-3 h-3 text-text-secondary" />
+              </button>
+            )}
           </div>
-          {trend && trendValue && (
+          <div className="flex items-baseline gap-2">
+            {isEditing ? (
+              <div className="flex items-center gap-2">
+                <span className="text-text-primary text-3xl font-bold">{prefix}</span>
+                <input
+                  type="number"
+                  value={tempValue}
+                  onChange={(e) => setTempValue(e.target.value)}
+                  className="w-32 px-2 py-1 bg-glass-bg border border-glass-border rounded text-text-primary text-xl font-bold focus:outline-none focus:ring-2 focus:ring-cyan"
+                  autoFocus
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleSave();
+                    if (e.key === 'Escape') handleCancel();
+                  }}
+                />
+                <button
+                  onClick={handleSave}
+                  className="p-1 bg-cyan/20 hover:bg-cyan/30 rounded transition-colors"
+                  title="Save"
+                >
+                  <Check className="w-4 h-4 text-cyan" />
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="p-1 bg-error/20 hover:bg-error/30 rounded transition-colors"
+                  title="Cancel"
+                >
+                  <X className="w-4 h-4 text-error" />
+                </button>
+              </div>
+            ) : (
+              <span className="text-text-primary text-3xl font-bold">
+                {prefix}
+                {animated && typeof value === 'number' ? (
+                  <CountUp end={value} duration={2} decimals={decimals} separator="," />
+                ) : (
+                  value
+                )}
+                {suffix}
+              </span>
+            )}
+          </div>
+          {trend && trendValue && !isEditing && (
             <div className={`flex items-center gap-1 mt-2 ${trendColors[trend]}`}>
               <span className="text-sm font-medium">{trendValue}</span>
             </div>

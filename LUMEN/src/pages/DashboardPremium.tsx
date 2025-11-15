@@ -12,15 +12,19 @@ import MouseGlow from '../components/MouseGlow';
 import AuthenticatedNav from '../components/AuthenticatedNav';
 import { containerVariants, itemVariants } from '../utils/animations';
 import { useAuthStore } from '../store/authStore';
+import { useToastStore } from '../store/toastStore';
 import { API_ENDPOINTS, getAuthHeaders } from '../config/api';
 import { transactionService } from '../services/api';
 
 export default function DashboardPremium() {
-  const { logout } = useAuthStore();
+  const { logout, setUserType } = useAuthStore();
+  const addToast = useToastStore((state) => state.addToast);
   const navigate = useNavigate();
   const [userName, setUserName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [recentTransactions, setRecentTransactions] = useState<any[]>([]);
+  const [stats, setStats] = useState<any>(null);
+  const [monthlyIncome, setMonthlyIncome] = useState<number>(0);
 
   useEffect(() => {
     const token = localStorage.getItem('AUTH_TOKEN');
@@ -50,17 +54,37 @@ export default function DashboardPremium() {
         const data = await res.json();
         console.log('User data received:', data);
         
-        // Backend returns user object directly, not wrapped
-        setUserName(data.name || null);
+        // Detect user type from JWT token in localStorage OR from response
+        const userType = data.user_type || (() => {
+          const token = localStorage.getItem('AUTH_TOKEN');
+          if (token) {
+            try {
+              const payload = JSON.parse(atob(token.split('.')[1]));
+              return payload.user_type;
+            } catch (e) {
+              return null;
+            }
+          }
+          return null;
+        })();
+        
+        if (userType) {
+          setUserType(userType);
+          console.log('User type set to:', userType);
+        }
+        
+        // Backend returns user object with name field
+        const name = data.name || data.business_name || data.contact_person || null;
+        setUserName(name);
         setAvatarUrl(data.avatar_url || null);
         
-        console.log('Username set to:', data.name);
+        console.log('Username set to:', name);
         console.log('Avatar URL set to:', data.avatar_url);
       } catch (err) {
         console.error('Failed to fetch current user', err);
       }
     })();
-  }, [logout, navigate]);
+  }, [logout, navigate, setUserType]);
 
   const currentDate = new Date();
   const dateStr = currentDate.toLocaleDateString('en-US', {
@@ -70,10 +94,13 @@ export default function DashboardPremium() {
     day: 'numeric',
   });
 
-  // Fetch transactions from API
+  // Fetch transactions and stats from API
   useEffect(() => {
-    const fetchTransactions = async () => {
+    const fetchData = async () => {
       try {
+        console.log('[Dashboard] Fetching transactions and stats...');
+        
+        // Fetch transactions
         const response = await transactionService.getTransactions({ limit: 100 });
         if (response.success && response.data) {
           // Sort by date (most recent first) and take top 5
@@ -81,52 +108,87 @@ export default function DashboardPremium() {
             new Date(b.date).getTime() - new Date(a.date).getTime()
           ).slice(0, 5);
           setRecentTransactions(sorted);
+          console.log('[Dashboard] Loaded', response.data.transactions?.length || 0, 'transactions');
+        }
+
+        // Fetch stats
+        const statsRes = await fetch(API_ENDPOINTS.TRANSACTIONS.STATS, {
+          headers: getAuthHeaders(),
+        });
+        
+        console.log('[Dashboard] Stats response status:', statsRes.status);
+        
+        if (statsRes.ok) {
+          const statsData = await statsRes.json();
+          console.log('[Dashboard] Stats data received:', statsData);
+          setStats(statsData);
+        } else {
+          const errorText = await statsRes.text();
+          console.error('[Dashboard] Stats fetch failed:', statsRes.status, errorText);
         }
       } catch (error) {
-        console.error('Failed to fetch transactions:', error);
+        console.error('[Dashboard] Failed to fetch data:', error);
       }
     };
-    fetchTransactions();
+    
+    // Fetch immediately
+    fetchData();
+    
+    // Poll every 10 seconds for updates
+    const interval = setInterval(fetchData, 10000);
+    
+    return () => clearInterval(interval);
   }, []);
 
-  // Calculate stats
-  const totalBalance = 45280.50;
-  const monthlyIncome = 12500.00;
-  const monthlyExpenses = 8347.25;
-  const savingsRate = ((monthlyIncome - monthlyExpenses) / monthlyIncome * 100).toFixed(1);
+  // Calculate stats from real data
+  const totalSpent = stats?.total_amount || 0;
+  const monthlyExpenses = stats?.total_amount || 0;
+  const savingsRate = monthlyIncome > 0 ? (((monthlyIncome - monthlyExpenses) / monthlyIncome * 100).toFixed(1)) : '0.0';
+
+  // Debug: Log when stats change
+  useEffect(() => {
+    if (stats) {
+      console.log('[Dashboard] Stats updated:', {
+        totalSpent,
+        monthlyExpenses,
+        totalTransactions: stats.total_transactions,
+        categoriesCount: stats.categories?.length || 0
+      });
+    }
+  }, [stats, totalSpent, monthlyExpenses]);
+
+  const handleIncomeUpdate = (newIncome: number) => {
+    setMonthlyIncome(newIncome);
+    addToast('success', 'Monthly income updated');
+  };
 
   const quickStats = [
     {
       title: 'Total Amount Spent',
-      value: totalBalance,
+      value: totalSpent,
       prefix: '$',
       icon: DollarSign,
-      trend: 'up' as const,
-      trendValue: '+12.5%',
+      trend: 'neutral' as const,
+      trendValue: `${stats?.total_transactions || 0} transactions`,
     },
     {
       title: 'Monthly Income',
       value: monthlyIncome,
       prefix: '$',
       icon: TrendingUp,
-      trend: 'up' as const,
-      trendValue: '+8.2%',
+      trend: 'neutral' as const,
+      trendValue: 'Click to edit',
+      editable: true,
+      onSave: handleIncomeUpdate,
     },
     {
       title: 'Monthly Expenses',
       value: monthlyExpenses,
       prefix: '$',
       icon: ArrowDownRight,
-      trend: 'down' as const,
-      trendValue: '-3.1%',
+      trend: 'neutral' as const,
+      trendValue: `Last 30 days`,
     },
-    // {
-    //   title: 'Pending Reviews',
-    //   value: pendingReviews,
-    //   icon: AlertCircle,
-    //   trend: pendingReviews > 0 ? 'neutral' as const : 'up' as const,
-    //   trendValue: `${pendingReviews} items`,
-    // },
   ];
 
   const insights = [
@@ -180,7 +242,7 @@ export default function DashboardPremium() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.3 }}
             >
-              <span className="text-white">👋 Welcome back, {userName && userName.split(' ')[0] ? userName.split(' ')[0].toLowerCase() : 'user'}</span>
+              <span className="text-white">👋 Welcome back, {userName ? userName.split(' ')[0] : 'User'}</span>
             </motion.h1>
             <motion.p 
               className="text-text-secondary mb-6 text-lg"
@@ -290,41 +352,49 @@ export default function DashboardPremium() {
                   {/* Budget Progress */}
                   <div>
                     <div className="flex justify-between items-center mb-3">
-                      <span className="text-text-secondary">Monthly Budget</span>
+                      <span className="text-text-secondary">Monthly Spending</span>
                       <span className="text-text-primary font-semibold">
-                        ${monthlyExpenses.toLocaleString()} / $12,000
+                        ${monthlyExpenses.toLocaleString()}
                       </span>
                     </div>
                     <div className="relative h-3 bg-glass-bg rounded-full overflow-hidden">
                       <motion.div
                         className="absolute inset-y-0 left-0 bg-gradient-gold rounded-full"
                         initial={{ width: 0 }}
-                        animate={{ width: `${(monthlyExpenses / 12000) * 100}%` }}
+                        animate={{ width: monthlyIncome > 0 ? `${Math.min((monthlyExpenses / monthlyIncome) * 100, 100)}%` : '0%' }}
                         transition={{ duration: 1, delay: 0.6 }}
                       />
                     </div>
+                    {monthlyIncome > 0 && (
+                      <p className="text-xs text-text-secondary mt-1">
+                        {((monthlyExpenses / monthlyIncome) * 100).toFixed(1)}% of monthly income
+                      </p>
+                    )}
                   </div>
 
-                  {/* Category Breakdown */}
+                  {/* Category Breakdown - Real Data */}
                   <div className="grid grid-cols-2 gap-4">
-                    {[
-                      { name: 'Dining', amount: 1240, color: 'bg-luxe-gold' },
-                      { name: 'Shopping', amount: 2450, color: 'bg-luxe-amber' },
-                      { name: 'Transport', amount: 890, color: 'bg-luxe-bronze' },
-                      { name: 'Utilities', amount: 1200, color: 'bg-luxe-muted' },
-                    ].map((category, index) => (
-                      <motion.div
-                        key={category.name}
-                        initial={{ opacity: 0, scale: 0.9 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        transition={{ duration: 0.3, delay: 0.7 + index * 0.1 }}
-                        className="p-4 bg-glass-bg rounded-glass border border-glass-border"
-                      >
-                        <div className={`w-2 h-2 rounded-full ${category.color} mb-2`} />
-                        <div className="text-sm text-text-secondary mb-1">{category.name}</div>
-                        <div className="text-lg font-bold">${category.amount.toLocaleString()}</div>
-                      </motion.div>
-                    ))}
+                    {(stats?.categories || []).slice(0, 4).map((category: any, index: number) => {
+                      const colors = ['bg-luxe-gold', 'bg-luxe-amber', 'bg-luxe-bronze', 'bg-luxe-muted'];
+                      return (
+                        <motion.div
+                          key={category.category || index}
+                          initial={{ opacity: 0, scale: 0.9 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          transition={{ duration: 0.3, delay: 0.7 + index * 0.1 }}
+                          className="p-4 bg-glass-bg rounded-glass border border-glass-border"
+                        >
+                          <div className={`w-2 h-2 rounded-full ${colors[index % colors.length]} mb-2`} />
+                          <div className="text-sm text-text-secondary mb-1">{category.category || 'Other'}</div>
+                          <div className="text-lg font-bold">${(category.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                        </motion.div>
+                      );
+                    })}
+                    {(!stats?.categories || stats.categories.length === 0) && (
+                      <div className="col-span-2 text-center py-6 text-text-secondary">
+                        No spending data yet
+                      </div>
+                    )}
                   </div>
                 </div>
               </GlassCard>

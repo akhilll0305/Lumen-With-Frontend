@@ -7,14 +7,17 @@ interface User {
   lastName: string;
   email: string;
   avatar?: string;
+  userType?: 'consumer' | 'business';
 }
 
 interface AuthStore {
   user: User | null;
   isAuthenticated: boolean;
-  login: (user: User) => void;
+  userType: 'consumer' | 'business' | null;
+  login: (user: User, userType?: 'consumer' | 'business') => void;
   logout: () => void;
   updateUser: (updates: Partial<User>) => void;
+  setUserType: (userType: 'consumer' | 'business') => void;
 }
 
 export const useAuthStore = create<AuthStore>()(
@@ -22,12 +25,14 @@ export const useAuthStore = create<AuthStore>()(
     (set) => ({
       user: null,
       isAuthenticated: false,
-      login: (user) => set({ user, isAuthenticated: true }),
-      logout: () => set({ user: null, isAuthenticated: false }),
+      userType: null,
+      login: (user, userType) => set({ user, isAuthenticated: true, userType: userType || user.userType || null }),
+      logout: () => set({ user: null, isAuthenticated: false, userType: null }),
       updateUser: (updates) => 
         set((state) => ({
           user: state.user ? { ...state.user, ...updates } : null,
         })),
+      setUserType: (userType) => set({ userType }),
     }),
     {
       name: 'lumen-auth-storage',
